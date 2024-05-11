@@ -1,0 +1,7 @@
+torch
+pytorch_lightning
+numpy
+opencv-python
+omegaconf
+einops
+open_clip_torch
