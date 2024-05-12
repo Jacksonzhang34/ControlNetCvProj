@@ -14,7 +14,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 # Parse command-line arguments
 def parse_args():
     parser = argparse.ArgumentParser(description="Train and evaluate a model on a custom dataset")
-    parser.add_argument('--prompt', type=str, help='Caption type', required=True)
+    parser.add_argument('--prompt', type=str, required=True, help='Caption type')
     return parser.parse_args()
 
 args = parse_args()
@@ -23,9 +23,10 @@ args = parse_args()
 current_dir = os.getcwd()
 coco_dir = os.path.join(current_dir, 'datasets/coco/')
 weights_dir = os.path.join(current_dir, 'trainedweights/')
+os.makedirs(weights_dir, exist_ok=True)
 pretrained_path = os.path.join(current_dir, 'control_sd21_ini.ckpt')
-eval_results_dir = os.path.join(current_dir, 'eval_results')
-os.makedirs(args.eval_results_dir, exist_ok=True)
+eval_results_dir = os.path.join(current_dir, 'eval_log')
+os.makedirs(eval_results_dir, exist_ok=True)
 
 # Data setup
 class MyDataset(Dataset):   
@@ -35,7 +36,7 @@ class MyDataset(Dataset):
             self.data = subset
         else:
             self.data = []
-            with open(os.path.join(self.data_dir, 'prompts', args.prompt), 'rt') as f:
+            with open(os.path.join(self.data_dir, 'prompts', f"{args.prompt}.json"), 'rt') as f:
                 for line in f:
                     self.data.append(json.loads(line))
 
@@ -77,9 +78,10 @@ def train_val_test_split(data, train_ratio, val_ratio):
 
 
 # Configs
-batch_size = 4 # todo set hyperparameter
-logger_freq = 300 # todo set hyperparameter
-learning_rate = 1e-5 # todo set hyperparameter
+batch_size = 4 # can fine-tune
+logger_freq = 300 # can fine-tune
+learning_rate = 1e-5 # can fine-tune
+num_workers = 2 # can fine-tune
 sd_locked = True
 only_mid_control = False
 
@@ -92,16 +94,16 @@ model.only_mid_control = only_mid_control
 full_dataset = MyDataset(coco_dir)
 train_ratio, val_ratio, test_ratio = 0.8, 0.1, 0.1
 train_dataset, val_dataset, test_dataset = train_val_test_split(full_dataset, train_ratio, val_ratio)
-train_loader = DataLoader(train_dataset, num_workers=2, batch_size=batch_size, shuffle=False)
-val_loader = DataLoader(val_dataset, num_workers=2, batch_size=batch_size, shuffle=False) # todo set num_workers
-test_loader = DataLoader(test_dataset, num_workers=2, batch_size=batch_size, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
 # Training setup
 image_logger = ImageLogger(batch_frequency=logger_freq)
 tb_logger = TensorBoardLogger(save_dir="tb_log", name="ControlNet")
 checkpoint_callback = ModelCheckpoint(
     dirpath=weights_dir,
-    filename=os.path.splitext(args.prompt)[0],
+    filename=args.prompt,
     save_top_k=1,
     verbose=True
 )
@@ -116,8 +118,8 @@ trainer = pl.Trainer(
 # Training
 trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
-# Evalution
+# Evaluation
 eval_results = trainer.test(model=model, dataloaders=test_loader, ckpt_path="best")
-result_path = os.path.join(eval_results_dir, f"{os.path.splitext(args.prompt)[0]}_results.json")
+result_path = os.path.join(eval_results_dir, f"{args.prompt}_results.json")
 with open(result_path, "w") as f:
     json.dump(eval_results, f)
