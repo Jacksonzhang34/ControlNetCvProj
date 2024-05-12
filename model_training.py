@@ -116,7 +116,7 @@ trainer = pl.Trainer(
 
 # Training
 trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-torch.save(model.state_dict(), weights_dir+args.prompt)
+torch.save(model.state_dict(), os.path.join(weights_dir,args.prompt))
 
 
 # Evaluation
