@@ -143,3 +143,7 @@ dmypy.json
 .pyre/
 
 .DS_Store
+
+datasets/
+
+control_sd21_ini.ckpt
