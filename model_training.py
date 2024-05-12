@@ -25,7 +25,7 @@ args = parse_args()
 
 # File path setup
 current_dir = os.getcwd()
-coco_dir = os.path.join(current_dir, "coco/")  # training data directory
+coco_dir = os.path.join(current_dir, "datasets/coco/")  # training data directory
 weights_dir = os.path.join(
     current_dir, "trainedweights/"
 )  # location of trained weights to be saved
@@ -36,7 +36,7 @@ pretrained_path = os.path.join(
 # eval_results_dir = os.path.join(current_dir, 'eval_log')
 # os.makedirs(eval_results_dir, exist_ok=True)
 
-device_name = 'cuda' if torch.cuda.is_available() else 'cpu'
+device_name = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(device_name)
 
 
