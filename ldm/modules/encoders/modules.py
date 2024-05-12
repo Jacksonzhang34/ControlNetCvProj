@@ -184,7 +184,8 @@ class FrozenOpenCLIPEmbedder(AbstractEncoder):
         # weight path for macOSX
         # weight_path = "/Users/${USER}/.cache/huggingface/hub/models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/snapshots/de081ac0a0ca8dc9d1533eed1ae884bb8ae1404b/open_clip_pytorch_model.bin"
         # weight path for supercloud
-        USER = os.getlogin()
+        # USER = os.getlogin()
+        USER = "sidnayak"
         weight_path = f"/home/gridsan/{USER}/HF_weights/open_clip_pytorch_model.bin"
         if os.path.exists(weight_path):
             print("loading from local file", weight_path)
