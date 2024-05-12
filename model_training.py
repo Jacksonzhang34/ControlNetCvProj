@@ -35,8 +35,9 @@ pretrained_path = os.path.join(
 )  # pretrained weights
 # eval_results_dir = os.path.join(current_dir, 'eval_log')
 # os.makedirs(eval_results_dir, exist_ok=True)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device_name = "cuda" if torch.cuda.is_available() else "cpu"
+
+device_name = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = torch.device(device_name)
 
 
 # Data setup
