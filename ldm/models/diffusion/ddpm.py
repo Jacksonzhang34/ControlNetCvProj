@@ -454,6 +454,48 @@ class DDPM(pl.LightningModule):
 
         return loss
 
+#####################################################
+# def log_local(self, save_dir, split, images, global_step="", current_epoch="", batch_idx=""):
+#     root = os.path.join(save_dir, "image_log", split)
+#     for k in images:
+#         grid = torchvision.utils.make_grid(images[k], nrow=4)
+#         grid = (grid + 1.0) / 2.0  # -1,1 -> 0,1; c,h,w
+#         grid = grid.transpose(0, 1).transpose(1, 2).squeeze(-1)
+#         grid = grid.numpy()
+#         grid = (grid * 255).astype(np.uint8)
+#         filename = "{}.png".format(k)
+#         path = os.path.join(root, filename)
+#         os.makedirs(os.path.split(path)[0], exist_ok=True)
+
+#         if grid.shape[2] == 6: #This part is for when the controlnet receives two conditions as input.
+#             grid1 = grid[:, :, :3]
+#             grid2 = grid[:, :, 3:]
+#             new_grid = np.concatenate((grid1, grid2))
+#             Image.fromarray(new_grid).save(path)
+#         else:
+#             Image.fromarray(grid).save(path)
+
+#     def shared_step_test(self, batch, **kwargs):
+#         images = self.log_images(batch, split="test_", ddim_steps=50)
+#         for k in images:
+#             N = min(images[k].shape[0], 3)
+#             images[k] = images[k][0:]
+#             if isinstance(images[k], torch.Tensor):
+#                 images[k] = images[k].detach().cpu()
+#                 images[k] = torch.clamp(images[k], -1., 1.)
+#         self.log_local("./", "test_", images)
+
+    def shared_step_test(self, batch):
+        x = self.get_input(batch, self.first_stage_key)
+        loss, loss_dict = self(x)
+        return loss, loss_dict
+
+
+    @torch.no_grad()
+    def test_step(self, batch, batch_idx):
+        self.shared_step_test(batch)
+###########################################################
+
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
         _, loss_dict_no_ema = self.shared_step(batch)
