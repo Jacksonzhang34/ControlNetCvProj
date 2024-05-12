@@ -35,6 +35,8 @@ pretrained_path = os.path.join(
 )  # pretrained weights
 # eval_results_dir = os.path.join(current_dir, 'eval_log')
 # os.makedirs(eval_results_dir, exist_ok=True)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device_name = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 # Data setup
@@ -96,8 +98,9 @@ num_workers = 2  # can fine-tune
 sd_locked = True
 only_mid_control = False
 
-model = create_model("./models/cldm_v21.yaml").cpu()
-model.load_state_dict(torch.load(pretrained_path, map_location="cpu"))
+
+model = create_model("./models/cldm_v21.yaml").to(device)
+model.load_state_dict(torch.load(pretrained_path, map_location=device_name))
 model.learning_rate = learning_rate
 model.sd_locked = sd_locked
 model.only_mid_control = only_mid_control
