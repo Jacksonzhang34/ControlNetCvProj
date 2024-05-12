@@ -101,25 +101,26 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num
 # Training setup
 image_logger = ImageLogger(batch_frequency=logger_freq)
 tb_logger = TensorBoardLogger(save_dir="tb_log", name="ControlNet")
-checkpoint_callback = ModelCheckpoint(
-    dirpath=weights_dir,
-    filename=args.prompt,
-    save_top_k=1,
-    verbose=True
-)
+# checkpoint_callback = ModelCheckpoint(
+#     dirpath=weights_dir,
+#     filename=args.prompt,
+#     save_top_k=1,
+#     verbose=True
+# )
 trainer = pl.Trainer(
     accelerator='gpu',
     precision=16,
-    callbacks=[checkpoint_callback],
     max_epochs=10,
     logger=[tb_logger, image_logger]
 )
 
 # Training
 trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+torch.save(model.state_dict(), weights_dir+args.prompt)
+
 
 # Evaluation
-eval_results = trainer.test(model=model, dataloaders=test_loader, ckpt_path="best")
-result_path = os.path.join(eval_results_dir, f"{args.prompt}_results.json")
-with open(result_path, "w") as f:
-    json.dump(eval_results, f)
+# eval_results = trainer.test(model=model, dataloaders=test_loader, ckpt_path="best")
+# result_path = os.path.join(eval_results_dir, f"{args.prompt}_results.json")
+# with open(result_path, "w") as f:
+#     json.dump(eval_results, f)
