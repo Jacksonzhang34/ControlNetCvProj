@@ -21,12 +21,12 @@ args = parse_args()
 
 # File path setup
 current_dir = os.getcwd()
-coco_dir = os.path.join(current_dir, 'datasets/coco/')
-weights_dir = os.path.join(current_dir, 'trainedweights/')
+coco_dir = os.path.join(current_dir, 'coco/') #training data directory
+weights_dir = os.path.join(current_dir, 'trainedweights/') #location of trained weights to be saved
 os.makedirs(weights_dir, exist_ok=True)
-pretrained_path = os.path.join(current_dir, 'control_sd21_ini.ckpt')
-eval_results_dir = os.path.join(current_dir, 'eval_log')
-os.makedirs(eval_results_dir, exist_ok=True)
+pretrained_path = os.path.join(current_dir, 'control_sd21_ini.ckpt') #pretrained weights
+# eval_results_dir = os.path.join(current_dir, 'eval_log')
+# os.makedirs(eval_results_dir, exist_ok=True)
 
 # Data setup
 class MyDataset(Dataset):   
