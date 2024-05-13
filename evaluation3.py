@@ -23,7 +23,6 @@ from cldm.ddim_hacked import DDIMSampler
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
 from image_similarity_measures.quality_metrics import fsim
-from concurrent.futures import ThreadPoolExecutor
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -100,22 +99,21 @@ def process_image_pair(img_path, label_path):
     mse = np.mean((predicted - label) ** 2)
     ssim_value = ssim(predicted, label, channel_axis=-1)
     fsim_value = fsim(predicted, label)
-    return mse, ssim_value, fsim_value, predicted, img_path, label_path
+    return mse, ssim_value, fsim_value, predicted
+
 
 def evaluate(input_dir, label_dir, num_images):
 
-    weights_pic_dir = os.join(pic_dir, args.weightName)
+    weights_pic_dir = os.path.join(pic_dir, args.weightName)
     os.makedirs(weights_pic_dir, exist_ok=True)
 
     input_paths = [os.path.join(input_dir, f) for f in sorted(os.listdir(input_dir))][:num_images]
     label_paths = [os.path.join(label_dir, f) for f in sorted(os.listdir(label_dir))][:num_images]
 
-    mse_scores, ssim_scores, fsim_scores= [], [], []
+    mse_scores, ssim_scores, fsim_scores = [], [], []
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        results = executor.map(process_image_pair, input_paths, label_paths)
-
-    for i, (mse, ssim_value, fsim_value, predicted, img_path, label_path) in enumerate(results):
+    for i, (img_path, label_path) in enumerate(zip(input_paths, label_paths)):
+        mse, ssim_value, fsim_value, predicted = process_image_pair(img_path, label_path)
         mse_scores.append(mse)
         ssim_scores.append(ssim_value)
         fsim_scores.append(fsim_value)
@@ -125,7 +123,6 @@ def evaluate(input_dir, label_dir, num_images):
             cv2.imwrite(image_save_path, cv2.cvtColor(predicted, cv2.COLOR_RGB2BGR))
             with open(os.path.join(eval_metrics_dir, "image_log.txt"), "a") as log_file:
                 log_file.write(f"{i}: {os.path.basename(img_path)}, {os.path.basename(label_path)}\n")
-
 
     avg_mse = np.mean(mse_scores)
     avg_ssim = np.mean(ssim_scores)
@@ -137,10 +134,9 @@ def evaluate(input_dir, label_dir, num_images):
         file.write(f"Average SSIM: {avg_ssim}\n")
         file.write(f"Average FSIM: {avg_fsim}\n")
 
-    # return avg_mse, avg_ssim
+    return avg_mse, avg_ssim, avg_fsim
 
 
 source = os.path.join(coco_dir, 'source/')
 target = os.path.join(coco_dir, 'target/')
-
 eval = evaluate(source, target, 1000)
