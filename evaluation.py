@@ -38,6 +38,10 @@ pretrained_path = os.path.join(current_dir, "control_sd21_ini.ckpt")
 coco_dir = os.path.join(current_dir, "datasets/coco/")
 weights_dir = os.path.join(current_dir, "trainedweights/")
 
+eval_metrics_dir = os.path.join(
+    current_dir, "evalmetrics/"
+)  # location of trained weights to be saved
+os.makedirs(eval_metrics_dir, exist_ok=True)
 
 
 N = 1
@@ -107,10 +111,12 @@ def evaluate(input_dir, label_dir, num_images):
     avg_mse = np.mean(mse_scores)
     avg_ssim = np.mean(ssim_scores)
 
-    print(f"Average MSE: {avg_mse}")
-    print(f"Average SSIM: {avg_ssim}")
+    metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}.txt')
+    with open(metrics_file_path, 'w') as file:
+        file.write(f"Average MSE: {avg_mse}\n")
+        file.write(f"Average SSIM: {avg_ssim}\n")
 
-    return avg_mse, avg_ssim
+    # return avg_mse, avg_ssim
 
 
 source = os.path.join(coco_dir, 'source/')
