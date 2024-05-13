@@ -123,13 +123,15 @@ def evaluate(input_paths, label_paths):
 
     mse_scores, ssim1_scores, ssim_scores, fsim_scores = [], [], [], []
 
-    with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        results = executor.map(process_image_pair, input_paths, label_paths)
-        for mse, ssim1_value, ssim_value, fsim_value in results:
-            mse_scores.append(mse)
-            ssim1_scores.append(ssim1_value)
-            ssim_scores.append(ssim_value)
-            fsim_scores.append(fsim_value)
+    # with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
+    #     results = executor.map(process_image_pair, input_paths, label_paths)
+
+    for input_path, label_path in zip(input_paths, label_paths):
+        mse, ssim1_value, ssim_value, fsim_value = process_image_pair(input_path, label_path)
+        mse_scores.append(mse)
+        ssim1_scores.append(ssim1_value)
+        ssim_scores.append(ssim_value)
+        fsim_scores.append(fsim_value)
 
     avg_mse = np.mean(mse_scores)
     avg_ssim1 = np.mean(ssim1_scores)
