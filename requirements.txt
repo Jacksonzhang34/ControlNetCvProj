@@ -7,3 +7,5 @@ einops
 open_clip_torch
 tensorboard
 transformers
+scikit-image
+sewar

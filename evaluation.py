@@ -21,7 +21,9 @@ from annotator.util import resize_image
 import einops
 from cldm.ddim_hacked import DDIMSampler
 from PIL import Image
-from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import structural_similarity
+from sewar.full_ref import ssim, fsim
+from image_quality import fsim
 from concurrent.futures import ThreadPoolExecutor
 
 def parse_args():
@@ -53,6 +55,23 @@ model = create_model('./models/cldm_v21.yaml').to(device)
 model.load_state_dict(load_state_dict(os.path.join(weights_dir, args.weightName), location=device_name))
 ddim_sampler = DDIMSampler(model)
 
+TRAIN_RATIO, VAL_RATIO, TEST_RATIO = 0.4, 0.1, 0.5
+
+def get_data_paths(data_dir, num_images):
+    data = []
+    with open(
+        os.path.join(data_dir, "prompts", f"prompt_raw.json"), "rt"
+    ) as f:
+        for line in f:
+            data.append(json.loads(line))
+
+    n = len(data)
+    test_start = int(n * (TRAIN_RATIO + VAL_RATIO))
+    
+    input_paths = [os.path.join(data_dir, data[i]["source"]) for i in range(test_start, test_start + num_images)]
+    label_paths = [os.path.join(data_dir, data[i]["target"]) for i in range(test_start, test_start + num_images)]
+    
+    return input_paths, label_paths
 
 def process(img_path):
   img = cv2.imread(img_path)
@@ -92,34 +111,47 @@ def process_image_pair(img_path, label_path):
     label = cv2.cvtColor(label, cv2.COLOR_BGR2RGB)
     # label = cv2.resize(label, (predicted.shape[1], predicted.shape[0]))
     mse = np.mean((predicted - label) ** 2)
-    ssim_value = ssim(predicted, label, multichannel=True)
-    return mse, ssim_value
+    ssim1_value = structural_similarity(predicted, label, multichannel=True)
+    ssim_value = ssim(predicted, label)
+    fsim_value = fsim(predicted, label)
+    
+    return mse, ssim1_value, ssim_value, fsim_value
 
-def evaluate(input_dir, label_dir, num_images):
-    input_paths = [os.path.join(input_dir, f) for f in sorted(os.listdir(input_dir))][:num_images]
-    label_paths = [os.path.join(label_dir, f) for f in sorted(os.listdir(label_dir))][:num_images]
+def evaluate(input_paths, label_paths):
+    # test_start = 4000 + 1000
+    # input_paths = [os.path.join(input_dir, f) for f in sorted(os.listdir(input_dir))][test_start:test_start+num_images]
+    # label_paths = [os.path.join(label_dir, f) for f in sorted(os.listdir(label_dir))][test_start:test_start+num_images]
 
-    mse_scores = []
-    ssim_scores = []
+    mse_scores, ssim1_scores, ssim_scores, fsim_scores = [], [], [], []
 
     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
         results = executor.map(process_image_pair, input_paths, label_paths)
-        for mse, ssim_value in results:
+        for mse, ssim1_value, ssim_value, fsim_value in results:
             mse_scores.append(mse)
+            ssim1_scores.append(ssim1_value)
             ssim_scores.append(ssim_value)
+            fsim_scores.append(fsim_value)
 
     avg_mse = np.mean(mse_scores)
+    avg_ssim1 = np.mean(ssim1_scores)
     avg_ssim = np.mean(ssim_scores)
+    avg_fsim = np.mean(fsim_scores)
 
     metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}.txt')
     with open(metrics_file_path, 'w') as file:
         file.write(f"Average MSE: {avg_mse}\n")
+        file.write(f"Average SSIM1: {avg_ssim1}\n")
         file.write(f"Average SSIM: {avg_ssim}\n")
+        file.write(f"Average FSIM: {avg_fsim}\n")
 
-    # return avg_mse, avg_ssim
+    return avg_mse, avg_ssim1, avg_ssim, avg_fsim
 
 
-source = os.path.join(coco_dir, 'source/')
-target = os.path.join(coco_dir, 'target/')
+# source = os.path.join(coco_dir, 'source/')
+# target = os.path.join(coco_dir, 'target/')
 
-eval = evaluate(source, target, 1000)
+print('start')
+input_paths, label_paths = get_data_paths(coco_dir, 10)
+print(input_paths, label_paths)
+avgs = evaluate(input_paths, label_paths)
+print(avgs)
