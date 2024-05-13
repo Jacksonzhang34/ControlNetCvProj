@@ -38,7 +38,7 @@ pretrained_path = os.path.join(
 print('3')
 device_name = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(device_name)
-print('4')
+print(device_name)
 
 # Data setup
 class MyDataset(Dataset):
@@ -95,13 +95,15 @@ def train_val_test_split(data, train_ratio, val_ratio):
 batch_size = 4  # can fine-tune
 logger_freq = 300  # can fine-tune
 learning_rate = 1e-5  # can fine-tune
-num_workers = 2  # can fine-tune
+num_workers = 0  # can fine-tune
 sd_locked = True
 only_mid_control = False
 
 print('5')
 model = create_model("./models/cldm_v21.yaml").to(device)
+print('5.1')
 model.load_state_dict(torch.load(pretrained_path, map_location=device_name))
+print('5.2')
 model.learning_rate = learning_rate
 model.sd_locked = sd_locked
 model.only_mid_control = only_mid_control
@@ -122,9 +124,9 @@ test_loader = DataLoader(
 )
 print('7')
 # Training setup
-image_logger = ImageLogger(batch_frequency=logger_freq)
-tb_logger = TensorBoardLogger(save_dir="tb_log", name="ControlNet")
-csv_logger = CSVLogger("csv_log", name="ControlNet")
+# image_logger = ImageLogger(batch_frequency=logger_freq)
+tb_logger = TensorBoardLogger(save_dir="tb_log", name=args.prompt)
+csv_logger = CSVLogger("csv_log", name=args.prompt)
 # checkpoint_callback = ModelCheckpoint(
 #     dirpath=weights_dir,
 #     filename=args.prompt,
@@ -133,7 +135,7 @@ csv_logger = CSVLogger("csv_log", name="ControlNet")
 # )
 print('8')
 trainer = pl.Trainer(
-    accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, csv_logger, image_logger]
+    accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, csv_logger]
 )
 print('9')
 # trainer = pl.Trainer(accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger])

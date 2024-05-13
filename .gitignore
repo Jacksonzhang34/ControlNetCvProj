@@ -144,10 +144,11 @@ dmypy.json
 
 .DS_Store
 
-datasets/
-datasets.zip
+datasets*
+
+models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K*
 
 control_sd21_ini.ckpt
+trainedweights*
 
-models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/
-models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K.zip
+tb_log
