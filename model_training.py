@@ -9,9 +9,9 @@ from cldm.logger import ImageLogger
 from cldm.model import create_model, load_state_dict
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 
-
+print('1')
 # Parse command-line arguments
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -22,7 +22,7 @@ def parse_args():
 
 
 args = parse_args()
-
+print('2')
 # File path setup
 current_dir = os.getcwd()
 coco_dir = os.path.join(current_dir, "datasets/coco/")  # training data directory
@@ -35,10 +35,10 @@ pretrained_path = os.path.join(
 )  # pretrained weights
 # eval_results_dir = os.path.join(current_dir, 'eval_log')
 # os.makedirs(eval_results_dir, exist_ok=True)
-
+print('3')
 device_name = "cuda" if torch.cuda.is_available() else "cpu"
 device = torch.device(device_name)
-
+print('4')
 
 # Data setup
 class MyDataset(Dataset):
@@ -99,13 +99,13 @@ num_workers = 2  # can fine-tune
 sd_locked = True
 only_mid_control = False
 
-
+print('5')
 model = create_model("./models/cldm_v21.yaml").to(device)
 model.load_state_dict(torch.load(pretrained_path, map_location=device_name))
 model.learning_rate = learning_rate
 model.sd_locked = sd_locked
 model.only_mid_control = only_mid_control
-
+print('6')
 full_dataset = MyDataset(coco_dir)
 train_ratio, val_ratio, test_ratio = 0.4, 0.1, 0.5
 train_dataset, val_dataset, test_dataset = train_val_test_split(
@@ -120,25 +120,29 @@ val_loader = DataLoader(
 test_loader = DataLoader(
     test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers
 )
-
+print('7')
 # Training setup
 image_logger = ImageLogger(batch_frequency=logger_freq)
 tb_logger = TensorBoardLogger(save_dir="tb_log", name="ControlNet")
+csv_logger = CSVLogger("csv_log", name="ControlNet")
 # checkpoint_callback = ModelCheckpoint(
 #     dirpath=weights_dir,
 #     filename=args.prompt,
 #     save_top_k=1,
 #     verbose=True
 # )
-# trainer = pl.Trainer(
-#     accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, image_logger]
-# )
-trainer = pl.Trainer(accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger])
+print('8')
+trainer = pl.Trainer(
+    accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, csv_logger, image_logger]
+)
+print('9')
+# trainer = pl.Trainer(accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger])
 
 # Training
 trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+print('10')
 torch.save(model.state_dict(), os.path.join(weights_dir, args.prompt))
-
+print('11')
 
 # Evaluation
 # eval_results = trainer.test(model=model, dataloaders=test_loader, ckpt_path="best")

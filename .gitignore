@@ -145,5 +145,9 @@ dmypy.json
 .DS_Store
 
 datasets/
+datasets.zip
 
 control_sd21_ini.ckpt
+
+models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K/
+models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K.zip
