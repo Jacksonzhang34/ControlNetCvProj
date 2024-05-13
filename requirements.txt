@@ -5,3 +5,4 @@ opencv-python
 omegaconf
 einops
 open_clip_torch
+tensorboard
