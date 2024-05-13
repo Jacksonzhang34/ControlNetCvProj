@@ -1,10 +1,11 @@
 import torch
 import sys
 import os
-import torchvision
+import torchvision # not used?
 import json
 import cv2
 import numpy as np
+import argparse
 from torch.utils.data import Dataset
 
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -16,27 +17,38 @@ import torch
 
 from share import *
 from cldm.model import create_model, load_state_dict
-import cv2
 from annotator.util import resize_image
-import numpy as np
 import einops
 from cldm.ddim_hacked import DDIMSampler
 from PIL import Image
 from skimage.metrics import structural_similarity as ssim
 from concurrent.futures import ThreadPoolExecutor
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Train and evaluate a model on a custom dataset"
+    )
+    parser.add_argument("--weightName", type=str, required=True, help="Caption type")
+    return parser.parse_args()
+
+args = parse_args()
+
+current_dir = os.getcwd()
+pretrained_path = os.path.join(current_dir, "control_sd21_ini.ckpt") 
+coco_dir = os.path.join(current_dir, "datasets/coco/")
+weights_dir = os.path.join(current_dir, "trainedweights/")
 
 
-resume_path = '/content/drive/My Drive/CV-JV-final-project/models/trained weights/mini_weights.ckpt' # your checkpoint path
+
 N = 1
-ddim_steps = 30
+ddim_steps = 50
 
-model = create_model('./models/cldm_v21.yaml').cpu()
-model.load_state_dict(load_state_dict(resume_path, location='cuda'))
-model = model.cuda()
+device_name = "cuda" if torch.cuda.is_available() else "cpu"
+device = torch.device(device_name)
+model = create_model('./models/cldm_v21.yaml').to(device)
+model.load_state_dict(load_state_dict(os.path.join(weights_dir, args.weightName), location=device_name))
 ddim_sampler = DDIMSampler(model)
 
-sample_path = '/content/drive/My Drive/CV-JV-final-project/datasets/training/mini/source/0.png'
 
 def process(img_path):
   img = cv2.imread(img_path)
@@ -101,7 +113,7 @@ def evaluate(input_dir, label_dir, num_images):
     return avg_mse, avg_ssim
 
 
-source = '/content/drive/My Drive/CV-JV-final-project/datasets/training/mini/source/'
-target = '/content/drive/My Drive/CV-JV-final-project/datasets/training/mini/target/'
+source = os.path.join(coco_dir, 'source/')
+target = os.path.join(coco_dir, 'target/')
 
-eval = evaluate(source, target, 10)
+eval = evaluate(source, target, 1000)
