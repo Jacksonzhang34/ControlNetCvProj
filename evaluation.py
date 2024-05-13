@@ -22,8 +22,7 @@ import einops
 from cldm.ddim_hacked import DDIMSampler
 from PIL import Image
 from skimage.metrics import structural_similarity
-from sewar.full_ref import ssim, fsim
-from image_quality import fsim
+from image_similarity_measures.quality_metrics import fsim, ssim
 from concurrent.futures import ThreadPoolExecutor
 
 def parse_args():
