@@ -130,9 +130,10 @@ tb_logger = TensorBoardLogger(save_dir="tb_log", name="ControlNet")
 #     save_top_k=1,
 #     verbose=True
 # )
-trainer = pl.Trainer(
-    accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, image_logger]
-)
+# trainer = pl.Trainer(
+#     accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger, image_logger]
+# )
+trainer = pl.Trainer(accelerator="gpu", precision=16, max_epochs=10, logger=[tb_logger])
 
 # Training
 trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
