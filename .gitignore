@@ -151,4 +151,6 @@ models--laion--CLIP-ViT-H-14-laion2B-s32B-b79K*
 control_sd21_ini.ckpt
 trainedweights*
 
-tb_log
+tb_log/
+csv_log/
+LLSUB*
