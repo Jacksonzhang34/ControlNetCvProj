@@ -32,7 +32,7 @@ sys.path.append("..")
 import gradio as gr
 import random
 
-from dataset import *
+# from dataset import *
 
 
 def parse_args():
@@ -66,7 +66,7 @@ print('1')
 model = create_model('./models/cldm_v21.yaml').to(device)
 print('2')
 weights_path = os.path.join(weights_dir, args.weightName)
-model.load_state_dict(torch.load(weights_path, location=device_name))
+model.load_state_dict(torch.load(weights_path))
 print('3')
 ddim_sampler = DDIMSampler(model)
 print('4')
@@ -76,7 +76,7 @@ TRAIN_RATIO, VAL_RATIO, TEST_RATIO = 0.4, 0.1, 0.5
 def get_data_paths(data_dir, num_images):
     data = []
     with open(
-        os.path.join(data_dir, "prompts", f"prompt_raw.json"), "rt"
+        os.path.join(data_dir, "prompts", f"{args.weightName}.json"), "rt"
     ) as f:
         for line in f:
             data.append(json.loads(line))
@@ -90,52 +90,22 @@ def get_data_paths(data_dir, num_images):
     
     return input_paths, label_paths, captions
 
-def process(img_path):
-  img = cv2.imread(img_path)
-  img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-  img = resize_image(img, 512)
-
-  control = torch.from_numpy(img.copy()).float().cuda() / 255.0
-  control = torch.stack([control for _ in range(N)], dim=0)
-  control = einops.rearrange(control, 'b h w c -> b c h w').clone()
-  c_cat = control.cuda()
-  c = model.get_unconditional_conditioning(N)
-  uc_cross = model.get_unconditional_conditioning(N)
-  uc_cat = c_cat
-  uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross]}
-  cond={"c_concat": [c_cat], "c_crossattn": [c]}
-  b, c, h, w = cond["c_concat"][0].shape
-  shape = (4, h // 8, w // 8)
-
-  samples, intermediates = ddim_sampler.sample(ddim_steps, N,
-                                              shape, cond, verbose=False, eta=0.0,
-                                              unconditional_guidance_scale=9.0,
-                                              unconditional_conditioning=uc_full
-                                              )
-  x_samples = model.decode_first_stage(samples)
-  x_samples = x_samples.squeeze(0)
-  x_samples = (x_samples + 1.0) / 2.0
-  x_samples = x_samples.transpose(0, 1).transpose(1, 2)
-  x_samples = x_samples.cpu().numpy()
-  x_samples = (x_samples * 255).astype(np.uint8)
-
-  return x_samples
-
 
 A_PROMPT_DEFAULT = "best quality, extremely detailed"
 N_PROMPT_DEFAULT = "longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality"
 
 def run_sampler(
+    model,
     input_image: np.ndarray,
     prompt: str,
     num_samples: int = 1,
-    image_resolution: int = 256,
+    image_resolution: int = 512,
     seed: int = -1,
     a_prompt: str = A_PROMPT_DEFAULT,
     n_prompt: str = N_PROMPT_DEFAULT,
     guess_mode=False,
     strength=1.0,
-    ddim_steps=20,
+    ddim_steps=50,
     eta=0.0,
     scale=9.0,
     show_progress: bool = True,
@@ -162,7 +132,6 @@ def run_sampler(
 
         if config.save_memory:
             model.low_vram_shift(is_diffusing=False)
-
         cond = {
             "c_concat": [control],
             "c_crossattn": [
@@ -209,12 +178,16 @@ def run_sampler(
 
         results = [x_samples[i] for i in range(num_samples)]
 
-        return results
+        return np.asarray(results[0])
+
 
 
 def process_image_pair(img_path, label_path, caption):
     # predicted = process(img_path)
-    predicted = run_sampler(img_path, caption)
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = resize_image(img, 512)
+    predicted = run_sampler(model, img, caption)
     label = cv2.imread(label_path)
     label = cv2.cvtColor(label, cv2.COLOR_BGR2RGB)
     # label = cv2.resize(label, (predicted.shape[1], predicted.shape[0]))
