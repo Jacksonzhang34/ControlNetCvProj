@@ -16,24 +16,13 @@ from cldm.model import create_model, load_state_dict
 import torch
 
 from share import *
-from cldm.model import create_model, load_state_dict
-from annotator.util import resize_image, HWC3
+from annotator.util import resize_image
 import einops
 from cldm.ddim_hacked import DDIMSampler
 from PIL import Image
 from skimage.metrics import structural_similarity
 from image_similarity_measures.quality_metrics import fsim, ssim
 from concurrent.futures import ThreadPoolExecutor
-
-import sys
-
-sys.path.append("..")
-
-import gradio as gr
-import random
-
-# from dataset import *
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -48,6 +37,7 @@ current_dir = os.getcwd()
 pretrained_path = os.path.join(current_dir, "control_sd21_ini.ckpt") 
 coco_dir = os.path.join(current_dir, "datasets/coco/")
 weights_dir = os.path.join(current_dir, "trainedweights/")
+
 eval_dir = os.path.join(current_dir, "eval/")
 eval_logs_dir = os.path.join(eval_dir, "logs/")
 eval_metrics_dir = os.path.join(eval_dir, "metrics/")
@@ -66,6 +56,7 @@ print('1')
 model = create_model('./models/cldm_v21.yaml').to(device)
 print('2')
 weights_path = os.path.join(weights_dir, args.weightName)
+# model.load_state_dict(load_state_dict(weights_path, location=device_name))
 model.load_state_dict(torch.load(weights_path))
 print('3')
 ddim_sampler = DDIMSampler(model)
@@ -76,7 +67,7 @@ TRAIN_RATIO, VAL_RATIO, TEST_RATIO = 0.4, 0.1, 0.5
 def get_data_paths(data_dir, num_images):
     data = []
     with open(
-        os.path.join(data_dir, "prompts", f"{args.weightName}.json"), "rt"
+        os.path.join(data_dir, "prompts", f"prompt_raw.json"), "rt"
     ) as f:
         for line in f:
             data.append(json.loads(line))
@@ -86,108 +77,43 @@ def get_data_paths(data_dir, num_images):
     
     input_paths = [os.path.join(data_dir, data[i]["source"]) for i in range(test_start, test_start + num_images)]
     label_paths = [os.path.join(data_dir, data[i]["target"]) for i in range(test_start, test_start + num_images)]
-    captions = [data[i]["prompt"] for i in range(test_start, test_start + num_images)]
     
-    return input_paths, label_paths, captions
+    return input_paths, label_paths
+
+def process(img_path):
+  img = cv2.imread(img_path)
+  img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+  img = resize_image(img, 512)
+
+  control = torch.from_numpy(img.copy()).float().cuda() / 255.0
+  control = torch.stack([control for _ in range(N)], dim=0)
+  control = einops.rearrange(control, 'b h w c -> b c h w').clone()
+  c_cat = control.cuda()
+  c = model.get_unconditional_conditioning(N)
+  uc_cross = model.get_unconditional_conditioning(N)
+  uc_cat = c_cat
+  uc_full = {"c_concat": [uc_cat], "c_crossattn": [uc_cross]}
+  cond={"c_concat": [c_cat], "c_crossattn": [c]}
+  b, c, h, w = cond["c_concat"][0].shape
+  shape = (4, h // 8, w // 8)
+
+  samples, intermediates = ddim_sampler.sample(ddim_steps, N,
+                                              shape, cond, verbose=False, eta=0.0,
+                                              unconditional_guidance_scale=9.0,
+                                              unconditional_conditioning=uc_full
+                                              )
+  x_samples = model.decode_first_stage(samples)
+  x_samples = x_samples.squeeze(0)
+  x_samples = (x_samples + 1.0) / 2.0
+  x_samples = x_samples.transpose(0, 1).transpose(1, 2)
+  x_samples = x_samples.cpu().numpy()
+  x_samples = (x_samples * 255).astype(np.uint8)
+
+  return x_samples
 
 
-A_PROMPT_DEFAULT = "best quality, extremely detailed"
-N_PROMPT_DEFAULT = "longbody, lowres, bad anatomy, bad hands, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality"
-
-def run_sampler(
-    model,
-    input_image: np.ndarray,
-    prompt: str,
-    num_samples: int = 1,
-    image_resolution: int = 512,
-    seed: int = -1,
-    a_prompt: str = A_PROMPT_DEFAULT,
-    n_prompt: str = N_PROMPT_DEFAULT,
-    guess_mode=False,
-    strength=1.0,
-    ddim_steps=50,
-    eta=0.0,
-    scale=9.0,
-    show_progress: bool = True,
-):
-    with torch.no_grad():
-        if torch.cuda.is_available():
-            model = model.cuda()
-
-        ddim_sampler = DDIMSampler(model)
-
-        img = resize_image(HWC3(input_image), image_resolution)
-        H, W, C = img.shape
-
-        detected_map = np.zeros_like(img, dtype=np.uint8)
-        detected_map[np.min(img, axis=2) < 127] = 255
-
-        control = torch.from_numpy(detected_map.copy()).float().cuda() / 255.0
-        control = torch.stack([control for _ in range(num_samples)], dim=0)
-        control = einops.rearrange(control, "b h w c -> b c h w").clone()
-
-        if seed == -1:
-            seed = random.randint(0, 65535)
-        pl.seed_everything(seed)
-
-        if config.save_memory:
-            model.low_vram_shift(is_diffusing=False)
-        cond = {
-            "c_concat": [control],
-            "c_crossattn": [
-                model.get_learned_conditioning([prompt + ", " + a_prompt] * num_samples)
-            ],
-        }
-        un_cond = {
-            "c_concat": None if guess_mode else [control],
-            "c_crossattn": [model.get_learned_conditioning([n_prompt] * num_samples)],
-        }
-        shape = (4, H // 8, W // 8)
-
-        if config.save_memory:
-            model.low_vram_shift(is_diffusing=True)
-
-        model.control_scales = (
-            [strength * (0.825 ** float(12 - i)) for i in range(13)]
-            if guess_mode
-            else ([strength] * 13)
-        )  # Magic number. IDK why. Perhaps because 0.825**12<0.01 but 0.826**12>0.01
-        samples, intermediates = ddim_sampler.sample(
-            ddim_steps,
-            num_samples,
-            shape,
-            cond,
-            verbose=False,
-            eta=eta,
-            unconditional_guidance_scale=scale,
-            unconditional_conditioning=un_cond,
-            show_progress=show_progress,
-        )
-
-        if config.save_memory:
-            model.low_vram_shift(is_diffusing=False)
-
-        x_samples = model.decode_first_stage(samples)
-        x_samples = (
-            (einops.rearrange(x_samples, "b c h w -> b h w c") * 127.5 + 127.5)
-            .cpu()
-            .numpy()
-            .clip(0, 255)
-            .astype(np.uint8)
-        )
-
-        results = [x_samples[i] for i in range(num_samples)]
-
-        return np.asarray(results[0])
-
-
-
-def process_image_pair(img_path, label_path, caption):
-    # predicted = process(img_path)
-    img = cv2.imread(img_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = resize_image(img, 512)
-    predicted = run_sampler(model, img, caption)
+def process_image_pair(img_path, label_path):
+    predicted = process(img_path)
     label = cv2.imread(label_path)
     label = cv2.cvtColor(label, cv2.COLOR_BGR2RGB)
     # label = cv2.resize(label, (predicted.shape[1], predicted.shape[0]))
@@ -198,8 +124,7 @@ def process_image_pair(img_path, label_path, caption):
     
     return predicted, mse, ssim1_value, ssim_value, fsim_value
 
-
-def evaluate(input_paths, label_paths, captions):
+def evaluate(input_paths, label_paths):
     # test_start = 4000 + 1000
     # input_paths = [os.path.join(input_dir, f) for f in sorted(os.listdir(input_dir))][test_start:test_start+num_images]
     # label_paths = [os.path.join(label_dir, f) for f in sorted(os.listdir(label_dir))][test_start:test_start+num_images]
@@ -209,8 +134,8 @@ def evaluate(input_paths, label_paths, captions):
     # with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
     #     results = executor.map(process_image_pair, input_paths, label_paths)
 
-    for i, (img_path, label_path, caption) in enumerate(zip(input_paths, label_paths, captions)):
-        predicted, mse, ssim1_value, ssim_value, fsim_value = process_image_pair(img_path, label_path, caption)
+    for i, (img_path, label_path) in enumerate(zip(input_paths, label_paths)):
+        predicted, mse, ssim1_value, ssim_value, fsim_value = process_image_pair(img_path, label_path)
         mse_scores.append(mse)
         ssim1_scores.append(ssim1_value)
         ssim_scores.append(ssim_value)
@@ -233,7 +158,7 @@ def evaluate(input_paths, label_paths, captions):
                 file.write(f"Average MSE: {avg_mse}\n")
                 file.write(f"Average SSIM1: {avg_ssim1}\n")
                 file.write(f"Average SSIM: {avg_ssim}\n")
-                file.write(f"Average FSIM: {avg_fsim}\n")
+                file.write(f"Average FSIM: {avg_fsim}\n\n")
 
     avg_mse = np.mean(mse_scores)
     avg_ssim1 = np.mean(ssim1_scores)
@@ -256,7 +181,7 @@ def evaluate(input_paths, label_paths, captions):
 # eval = evaluate(source, target, 1000)
 
 print('start')
-input_paths, label_paths, captions = get_data_paths(coco_dir, 2)
-print(input_paths, label_paths, captions)
-avgs = evaluate(input_paths, label_paths, captions)
+input_paths, label_paths = get_data_paths(coco_dir, 2)
+print(input_paths, label_paths)
+avgs = evaluate(input_paths, label_paths)
 print(avgs)
