@@ -34,7 +34,9 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Train and evaluate a model on a custom dataset"
     )
-    parser.add_argument("--weightName", type=str, required=True, help="Caption type")
+    parser.add_argument("--weightName", type=str, required=True, help="Weight name for storage")
+    parser.add_argument("--prompt", type=str, required=True, help="Caption type")
+    parser.add_argument("--trained", type=str, required=True, help="Eval post or pre training")
     return parser.parse_args()
 
 args = parse_args()
@@ -46,11 +48,11 @@ weights_dir = os.path.join(current_dir, "trainedweights/")
 eval_dir = os.path.join(current_dir, "eval/")
 eval_logs_dir = os.path.join(eval_dir, "logs/")
 eval_metrics_dir = os.path.join(eval_dir, "metrics/")
-eval_img_pred_weight_dir = os.path.join(eval_dir, "images/predicted/", args.weightName)
+eval_pred_weight_trained_dir = os.path.join(eval_dir, "pred_imgs", args.weightName, args.trained)
 os.makedirs(eval_dir, exist_ok=True)
 os.makedirs(eval_logs_dir, exist_ok=True)
 os.makedirs(eval_metrics_dir, exist_ok=True)
-os.makedirs(eval_img_pred_weight_dir, exist_ok=True)
+os.makedirs(eval_pred_weight_trained_dir, exist_ok=True)
 
 TRAIN_RATIO, VAL_RATIO, TEST_RATIO = 0.4, 0.1, 0.1
 A_PROMPT_DEFAULT = "best quality, extremely detailed"
@@ -60,7 +62,7 @@ N_PROMPT_DEFAULT = "longbody, lowres, bad anatomy, bad hands, missing fingers, e
 def get_data_paths(data_dir):
     data = []
     with open(
-        os.path.join(data_dir, "prompts", f"{args.weightName}.json"), "rt"
+        os.path.join(data_dir, "prompts", f"{args.prompt}.json"), "rt"
     ) as f:
         for line in f:
             data.append(json.loads(line))
@@ -164,11 +166,10 @@ def run_sampler(
 
 
 def process_image_pair(img_path, label_path, caption):
-    print(img_path, label_path, caption)
+    print(os.path.basename(img_path), caption)
     # predicted = process(img_path)
     img = cv2.imread(img_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = resize_image(img, 512)
     predicted = run_sampler(model, img, caption)
     label = cv2.imread(label_path)
     label = cv2.cvtColor(label, cv2.COLOR_BGR2RGB)
@@ -192,9 +193,9 @@ def evaluate(img_paths, label_paths, captions):
         fsim_scores.append(fsim_value)
 
         if i % 50 == 0:
-            image_save_path = os.path.join(eval_img_pred_weight_dir, f"{os.path.basename(img_path)}")
+            image_save_path = os.path.join(eval_pred_weight_trained_dir, f"{os.path.basename(img_path)}")
             cv2.imwrite(image_save_path, cv2.cvtColor(predicted, cv2.COLOR_RGB2BGR))
-            eval_logs_file_path = os.path.join(eval_logs_dir, f'{args.weightName}.txt')
+            eval_logs_file_path = os.path.join(eval_logs_dir, f'{args.weightName}_{args.trained}.txt')
             with open(eval_logs_file_path, "a") as log_file:
                 log_file.write(f"{i}: {os.path.basename(img_path)}, {os.path.basename(label_path)}\n")
             
@@ -203,7 +204,7 @@ def evaluate(img_paths, label_paths, captions):
             avg_ssim = np.mean(ssim_scores)
             avg_fsim = np.mean(fsim_scores)
 
-            eval_metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}.txt')
+            eval_metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}_{args.trained}.txt')
             with open(eval_metrics_file_path, 'a') as file:
                 file.write(f"i: {i}\n")
                 file.write(f"Average MSE: {avg_mse}\n")
@@ -216,7 +217,7 @@ def evaluate(img_paths, label_paths, captions):
     avg_ssim = np.mean(ssim_scores)
     avg_fsim = np.mean(fsim_scores)
 
-    eval_metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}.txt')
+    eval_metrics_file_path = os.path.join(eval_metrics_dir, f'{args.weightName}_{args.trained}.txt')
     with open(eval_metrics_file_path, 'a') as file:
         file.write(f" ----- OVERALL ----- ")
         file.write(f"Average MSE: {avg_mse}\n")
@@ -232,7 +233,10 @@ print(device_name)
 device = torch.device(device_name)
 model = create_model('./models/cldm_v21.yaml').to(device)
 weights_path = os.path.join(weights_dir, args.weightName)
-model.load_state_dict(torch.load(weights_path))
+if args.trained == "true":
+    model.load_state_dict(torch.load(weights_path))
+else:
+    model.load_state_dict(torch.load(pretrained_path))
 print("model loaded")
 
 img_paths, label_paths, captions = get_data_paths(coco_dir)
