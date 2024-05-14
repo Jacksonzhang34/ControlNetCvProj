@@ -16,7 +16,6 @@ from cldm.model import create_model, load_state_dict
 import torch
 
 from share import *
-from cldm.model import create_model, load_state_dict
 from annotator.util import resize_image
 import einops
 from cldm.ddim_hacked import DDIMSampler
@@ -56,7 +55,9 @@ device = torch.device(device_name)
 print('1')
 model = create_model('./models/cldm_v21.yaml').to(device)
 print('2')
-model.load_state_dict(load_state_dict(os.path.join(weights_dir, args.weightName), location=device_name))
+weights_path = os.path.join(weights_dir, args.weightName)
+# model.load_state_dict(load_state_dict(weights_path, location=device_name))
+model.load_state_dict(torch.load(weights_path))
 print('3')
 ddim_sampler = DDIMSampler(model)
 print('4')
@@ -140,7 +141,7 @@ def evaluate(input_paths, label_paths):
         ssim_scores.append(ssim_value)
         fsim_scores.append(fsim_value)
 
-        if i % 100 == 0:
+        if i % 50 == 0:
             image_save_path = os.path.join(eval_img_pred_weight_dir, f"{os.path.basename(img_path)}")
             cv2.imwrite(image_save_path, cv2.cvtColor(predicted, cv2.COLOR_RGB2BGR))
             eval_logs_file_path = os.path.join(eval_logs_dir, f'{args.weightName}.txt')
@@ -157,7 +158,7 @@ def evaluate(input_paths, label_paths):
                 file.write(f"Average MSE: {avg_mse}\n")
                 file.write(f"Average SSIM1: {avg_ssim1}\n")
                 file.write(f"Average SSIM: {avg_ssim}\n")
-                file.write(f"Average FSIM: {avg_fsim}\n")
+                file.write(f"Average FSIM: {avg_fsim}\n\n")
 
     avg_mse = np.mean(mse_scores)
     avg_ssim1 = np.mean(ssim1_scores)
@@ -180,7 +181,7 @@ def evaluate(input_paths, label_paths):
 # eval = evaluate(source, target, 1000)
 
 print('start')
-input_paths, label_paths = get_data_paths(coco_dir, 10)
+input_paths, label_paths = get_data_paths(coco_dir, 2)
 print(input_paths, label_paths)
 avgs = evaluate(input_paths, label_paths)
 print(avgs)
